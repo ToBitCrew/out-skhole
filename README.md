@@ -31,3 +31,4 @@
 | 이미지 업로드    | AWS S3 or Cloudinary (무료 플랜) |
 | 학교 이메일 인증 | Nodemailer + OTP                 |
 | 검색 기능        | MariaDB FULLTEXT 인덱스          |
+어저고저쩌고

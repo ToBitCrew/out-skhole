@@ -23,7 +23,7 @@ const CIRCLE = 56;
 const SEARCH_CONTEXT: Record<string, string> = {
   index: "home",
   chat: "chat",
-  settings: "account",
+  account: "account",
 };
 
 export default function LiquidGlassTabBar({
@@ -55,6 +55,11 @@ export default function LiquidGlassTabBar({
 
   const handleSearch = () => {
     haptic();
+    // 홈에서는 탐색 화면, 그 외에는 컨텍스트 검색 화면
+    if (currentRoute === "index") {
+      router.push("/explore");
+      return;
+    }
     router.push({
       pathname: "/search",
       params: { context: SEARCH_CONTEXT[currentRoute] ?? "home" },

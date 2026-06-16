@@ -1,12 +1,25 @@
+import PostPreview from "@/components/post_preview";
+import { Colors } from "@/constants/theme";
+import * as postsApi from "@/services/posts";
+import type { PostListItem } from "@/types/api";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import { Colors } from "@/constants/theme";
+import { useCallback, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 type SearchContext = "home" | "chat" | "account";
 
-const META: Record<SearchContext, { title: string; placeholder: string; hint: string }> = {
+const META: Record<
+  SearchContext,
+  { title: string; placeholder: string; hint: string }
+> = {
   home: {
     title: "게시물 검색",
     placeholder: "게시물 제목·내용 검색",
@@ -26,12 +39,43 @@ const META: Record<SearchContext, { title: string; placeholder: string; hint: st
 
 export default function Search() {
   const { context } = useLocalSearchParams<{ context?: string }>();
-  const ctx: SearchContext = (["home", "chat", "account"].includes(context ?? "")
-    ? context
-    : "home") as SearchContext;
+  const ctx: SearchContext = (
+    ["home", "chat", "account"].includes(context ?? "")
+      ? context
+      : "home"
+  ) as SearchContext;
   const meta = META[ctx];
 
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PostListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const doSearch = useCallback(
+    async (q: string) => {
+      if (ctx !== "home" || q.trim().length < 1) {
+        setResults([]);
+        setSearched(false);
+        return;
+      }
+      setLoading(true);
+      setSearched(true);
+      try {
+        const data = await postsApi.searchPosts({ q: q.trim() });
+        setResults(data.items);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [ctx]
+  );
+
+  const handleChange = (text: string) => {
+    setQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(text), 400);
+  };
 
   return (
     <View style={styles.container}>
@@ -49,30 +93,57 @@ export default function Search() {
           placeholder={meta.placeholder}
           placeholderTextColor={Colors.textMuted}
           value={query}
-          onChangeText={setQuery}
+          onChangeText={handleChange}
           autoFocus
           returnKeyType="search"
+          onSubmitEditing={() => doSearch(query)}
         />
         {query.length > 0 && (
           <Ionicons
             name="close-circle"
             size={20}
             color={Colors.textMuted}
-            onPress={() => setQuery("")}
+            onPress={() => {
+              setQuery("");
+              setResults([]);
+              setSearched(false);
+            }}
           />
         )}
       </View>
 
-      <View style={styles.results}>
-        {/* TODO: context "{ctx}" 에 맞는 검색 결과를 표시 */}
-        <Text style={styles.hint}>{meta.hint}</Text>
-      </View>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={Colors.accent} />
+        </View>
+      ) : searched && results.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.hint}>검색 결과가 없습니다.</Text>
+        </View>
+      ) : results.length > 0 ? (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => String(item.post_id)}
+          renderItem={({ item }) => <PostPreview item={item} />}
+          contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        />
+      ) : (
+        <View style={styles.center}>
+          <Text style={styles.hint}>{meta.hint}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, padding: 16, gap: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    padding: 16,
+    gap: 16,
+  },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -83,6 +154,7 @@ const styles = StyleSheet.create({
     height: 44,
   },
   input: { flex: 1, color: Colors.text, fontSize: 16 },
-  results: { flex: 1, alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   hint: { color: Colors.textMuted, fontSize: 14 },
+  list: { paddingBottom: 40 },
 });
